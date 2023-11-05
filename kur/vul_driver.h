@@ -3,13 +3,14 @@
 #include "echo_driver_resource.h"
 #include "utils.h"
 #include <Windows.h>
+#include <filesystem>
 #include <iostream>
 #include <fstream>
 
 #pragma comment(lib, "ntdll.lib")
 
-#define SE_LOAD_DRIVER_PRIVILEGE 10L
-#define SERVICE_PATH_COMMON std::wstring(L"SYSTEM\\CurrentControlSet\\Services\\")
+constexpr auto SE_LOAD_DRIVER_PRIVILEGE = 10L;
+#define SERVICE_PATH_COMMON std::wstring(L"SYSTEM\\CurrentControlSet\\Services\\" + driver_name)
 
 namespace vul_driver
 {
@@ -17,7 +18,9 @@ namespace vul_driver
 
   auto get_full_driver_path() -> std::wstring;
   auto install_driver() -> BOOL;
-  auto delete_registry_key() -> BOOL;
-  auto setup_registry_key() -> BOOL;
-  auto service_start() -> BOOL;
+  auto setup_reg_key() -> BOOL;
+  auto load_driver() -> BOOL;
+  auto cleanup_reg_driver() -> BOOL;
+  auto delete_reg_key(HKEY h_key_root, LPCWSTR sub_key) -> BOOL;
+  auto unload_driver() -> BOOL;
 }
