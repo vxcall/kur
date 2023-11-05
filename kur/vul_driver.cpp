@@ -16,6 +16,7 @@ namespace vul_driver
   auto install_driver() -> BOOL
   {
     std::wstring full_driver_path = get_full_driver_path();
+    std::wcout << full_driver_path << std::endl;
     if (full_driver_path.empty())
     {
       std::cerr << "couldn't get full driver path" << std::endl;
@@ -28,7 +29,7 @@ namespace vul_driver
       std::cerr << "couldn't create file for writing the driver" << std::endl;
       return FALSE;
     }
-    sys_file << echo_driver_resource::driver;
+    sys_file.write(reinterpret_cast<const char*>(echo_driver_resource::driver), sizeof(echo_driver_resource::driver));
     sys_file.close();
     return TRUE;
   }

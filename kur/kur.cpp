@@ -7,7 +7,6 @@ auto main() -> int
     std::cerr << "couldn't deploy the driver" << std::endl;
     return 1;
   }
-  std::wcout << vul_driver::get_full_driver_path() << std::endl;
   do
   {
     auto status = vul_driver::setup_registry_key();
@@ -24,8 +23,9 @@ auto main() -> int
     }
   }
   while (false);
+  std::cout << "driver is loaded correctly." << std::endl;
+  //vul_driver::delete_registry_key();
+  //_wremove(vul_driver::get_full_driver_path().c_str());
   std::cin.get();
-  vul_driver::delete_registry_key();
-  _wremove(vul_driver::get_full_driver_path().c_str());
   return 0;
 }
