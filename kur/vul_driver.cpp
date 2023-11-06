@@ -44,29 +44,27 @@ namespace vul_driver
     return TRUE;
   }
 
-
-  // returns if reg_open_key_ex succeeded and the status.
-  auto does_reg_key_exist(HKEY h_key_root, LPCWSTR sub_key) -> std::pair<bool, LSTATUS>
+  // used to check if key exists or not
+  auto open_reg_key(HKEY h_key_root, LPCWSTR sub_key) -> LSTATUS
   {
     HKEY h_key;
-    LSTATUS status = RegOpenKeyExW(h_key_root, sub_key, 0, KEY_READ, &h_key);
+    const LSTATUS status = RegOpenKeyExW(h_key_root, sub_key, 0, KEY_READ, &h_key);
 
     if (status != ERROR_SUCCESS)
     {
-      return {false, status}; // Failed to open the key
+      return status;
     }
 
     RegCloseKey(h_key);
-    return {true, status}; // Successfully opened and closed the key
+    return status;
   }
-
 
   auto setup_reg_key() -> BOOL
   {
     const std::wstring services_path = SERVICE_PATH_COMMON + driver_name;
     const HKEY h_key_root = HKEY_LOCAL_MACHINE;
-
-    if (auto [result, status] = does_reg_key_exist(h_key_root, services_path.c_str()); result)
+    const auto l_status = open_reg_key(h_key_root, services_path.c_str());
+    if (l_status == ERROR_SUCCESS)
     {
       std::cerr << "service key already exists" << std::endl;
       return FALSE;
@@ -150,11 +148,22 @@ namespace vul_driver
     return TRUE;
   }
 
-  // Unloads driver, deletes the registry key and the driver file.
-  auto cleanup_reg_driver() -> BOOL
+  auto uninstall_driver() -> BOOL
   {
-    auto [result, status] = does_reg_key_exist(HKEY_LOCAL_MACHINE, (SERVICE_PATH_COMMON + driver_name).c_str());
-    if (!result)
+    // delete the driver file
+    int ok = _wremove(get_full_driver_path().c_str());
+    if (ok != 0)
+    {
+      return FALSE;
+    }
+    return TRUE;
+  }
+
+  auto cleanup_reg_driver(HANDLE h_device) -> BOOL
+  {
+    // first check if the key exists
+    const auto status = open_reg_key(HKEY_LOCAL_MACHINE, (SERVICE_PATH_COMMON + driver_name).c_str());
+    if (status != ERROR_SUCCESS)
     {
       if (status == ERROR_FILE_NOT_FOUND)
       {
@@ -163,6 +172,9 @@ namespace vul_driver
       std::cerr << "cleanup: key cannot be opened correctly" << std::endl;
       return FALSE;
     }
+
+    CloseHandle(h_device);
+    // unload the driver
     BOOL st = unload_driver();
     if (!st)
     {
@@ -170,28 +182,34 @@ namespace vul_driver
       return FALSE;
     }
 
-    st = delete_reg_key(HKEY_LOCAL_MACHINE, (SERVICE_PATH_COMMON + driver_name).c_str());
+    // delete the key
+    st = delete_reg_key();
     if (!st)
     {
       std::cerr << "cleanup: deleting key failed" << std::endl;
       return FALSE;
     }
 
-    int ok = _wremove(get_full_driver_path().c_str());
-    if (ok != 0)
+    // delete the driver file
+    st = uninstall_driver();
+    if (!st)
     {
-      std::cerr << "cleanup: deleting driver file failed" << std::endl;
+      std::cerr << "cleanup: uninstalling driver file failed" << std::endl;
       return FALSE;
     }
 
     return TRUE;
   }
 
-  auto delete_reg_key(HKEY h_key_root, LPCWSTR sub_key) -> BOOL
+  auto delete_reg_key() -> BOOL
   {
-    const LSTATUS status = RegDeleteTreeW(h_key_root, sub_key);
+    const LSTATUS status = RegDeleteTreeW(HKEY_LOCAL_MACHINE, (SERVICE_PATH_COMMON + driver_name).c_str());
     if (status != ERROR_SUCCESS)
     {
+      if (status == ERROR_FILE_NOT_FOUND)
+      {
+        return TRUE;
+      }
       std::cerr << "couldn't delete service key" << std::endl;
       return FALSE;
     }
@@ -216,7 +234,7 @@ namespace vul_driver
     if (status != 0x0)
     {
       std::cerr << "couldn't unload driver " << "NTSTATUS is: " << std::hex << status << std::endl;
-      delete_reg_key(HKEY_LOCAL_MACHINE, (SERVICE_PATH_COMMON + driver_name).c_str());
+      delete_reg_key();
       return FALSE;
     }
 

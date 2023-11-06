@@ -20,7 +20,9 @@ namespace vul_driver
   auto install_driver() -> BOOL;
   auto setup_reg_key() -> BOOL;
   auto load_driver() -> BOOL;
-  auto cleanup_reg_driver() -> BOOL;
-  auto delete_reg_key(HKEY h_key_root, LPCWSTR sub_key) -> BOOL;
+  auto cleanup_reg_driver(HANDLE h_device) -> BOOL;
+  auto delete_reg_key() -> BOOL;
+  auto uninstall_driver() -> BOOL;
   auto unload_driver() -> BOOL;
 }
+
