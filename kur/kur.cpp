@@ -20,14 +20,14 @@ auto kur_t::init() -> BOOL
 {
   if (!vul_driver.install())
   {
-    std::cerr << "couldn't deploy the driver" << std::endl;
+    std::cerr << "Deploying driver failed." << std::endl;
     return FALSE;
   }
 
   auto status = vul_driver.setup_reg_key();
   if (!status)
   {
-    std::cerr << "couldn't setup the registry" << std::endl;
+    std::cerr << "Setting up registry key to load driver is failed." << std::endl;
     vul_driver.uninstall();
     return FALSE;
   }
@@ -35,7 +35,7 @@ auto kur_t::init() -> BOOL
   status = vul_driver.load();
   if (!status)
   {
-    std::cerr << "couldn't start the service" << std::endl;
+    std::cerr << "Loading the vulnerable driver failed." << std::endl;
     vul_driver.uninstall();
     vul_driver.delete_reg_key();
     return FALSE;
@@ -44,9 +44,22 @@ auto kur_t::init() -> BOOL
   status = vul_driver.get_device_handle();
   if (!status)
   {
+    std::cerr << "Getting device handle failed" << std::endl;
     vul_driver.uninstall();
     vul_driver.delete_reg_key();
     vul_driver.unload();
+    return FALSE;
+  }
+
+  status = vul_driver.initialize_driver();
+  if (!status)
+  {
+    std::cerr << "Getting device handle failed" << std::endl;
+    vul_driver.uninstall();
+    vul_driver.delete_reg_key();
+    vul_driver.unload();
+    CloseHandle(vul_driver.h_device);
+    return FALSE;
   }
 
   return TRUE;

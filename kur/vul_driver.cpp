@@ -8,7 +8,7 @@ auto vul_driver::get_full_driver_path() const -> std::wstring
     std::cerr << "couldn't get temp path" << std::endl;
     return L"";
   }
-  return temp_path + driver_name + L".sys";
+  return temp_path + this->driver_name + L".sys";
 }
 
 auto vul_driver::install() const -> BOOL
@@ -44,7 +44,7 @@ auto vul_driver::install() const -> BOOL
 
 auto vul_driver::setup_reg_key() const -> BOOL
 {
-  const std::wstring services_path = SERVICE_PATH_COMMON + driver_name;
+  const std::wstring services_path = SERVICE_PATH_COMMON + this->driver_name;
   const HKEY h_key_root = HKEY_LOCAL_MACHINE;
   const auto l_status = utils::open_reg_key(h_key_root, services_path.c_str());
   if (l_status == ERROR_SUCCESS)
@@ -111,7 +111,7 @@ auto vul_driver::load() const -> BOOL
     return FALSE;
   }
 
-  std::wstring wdriver_reg_path = L"\\Registry\\Machine\\" + SERVICE_PATH_COMMON + driver_name;
+  std::wstring wdriver_reg_path = L"\\Registry\\Machine\\" + SERVICE_PATH_COMMON + this->driver_name;
   UNICODE_STRING service_path;
   RtlInitUnicodeString(&service_path, wdriver_reg_path.c_str());
 
@@ -131,7 +131,6 @@ auto vul_driver::load() const -> BOOL
   return TRUE;
 }
 
-// L"\\Device\\echo", GENERIC_READ | GENERIC_WRITE
 auto vul_driver::get_device_handle() -> BOOL
 {
   HANDLE handle;
@@ -139,7 +138,7 @@ auto vul_driver::get_device_handle() -> BOOL
   UNICODE_STRING uni_device_name;
   IO_STATUS_BLOCK io_status_block;
 
-  RtlInitUnicodeString(&uni_device_name, device_name.c_str());
+  RtlInitUnicodeString(&uni_device_name, this->device_name.c_str());
 
   InitializeObjectAttributes(&obj_attr, &uni_device_name,
                              OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
@@ -157,11 +156,11 @@ auto vul_driver::get_device_handle() -> BOOL
   if (!NT_SUCCESS(status))
   {
     std::cerr << "Failed to open handle. Status code: " << std::hex << status << std::endl;
-    h_device = nullptr;
+    this->h_device = nullptr;
     return FALSE;
   }
   // This handle has to be closed with CloseHandle(device_handle);
-  h_device = handle;
+  this->h_device = handle;
   return TRUE;
 }
 
@@ -176,13 +175,9 @@ auto vul_driver::uninstall() const -> BOOL
   return TRUE;
 }
 
-auto vul_driver::cleanup() const -> BOOL
-{
-}
-
 auto vul_driver::delete_reg_key() const -> BOOL
 {
-  const LSTATUS status = RegDeleteTreeW(HKEY_LOCAL_MACHINE, (SERVICE_PATH_COMMON + driver_name).c_str());
+  const LSTATUS status = RegDeleteTreeW(HKEY_LOCAL_MACHINE, (SERVICE_PATH_COMMON + this->driver_name).c_str());
   if (status != ERROR_SUCCESS)
   {
     if (status == ERROR_FILE_NOT_FOUND)
@@ -204,7 +199,7 @@ auto vul_driver::unload() const -> BOOL
     return FALSE;
   }
 
-  std::wstring wdriver_reg_path = L"\\Registry\\Machine\\" + SERVICE_PATH_COMMON + driver_name;
+  std::wstring wdriver_reg_path = L"\\Registry\\Machine\\" + SERVICE_PATH_COMMON + this->driver_name;
   UNICODE_STRING service_path;
   RtlInitUnicodeString(&service_path, wdriver_reg_path.c_str());
 
@@ -218,4 +213,36 @@ auto vul_driver::unload() const -> BOOL
   }
 
   return TRUE;
+}
+
+auto vul_driver::initialize_driver() const -> BOOL
+{
+  // can be improved by defining actual struct
+  /*
+  struct initialize_buffer
+  {
+    PUCHAR pbSignature;
+    DWORD cbSignature;
+    __declspec(align(8)) BYTE client_status;
+    DWORD maybe_size;
+  };
+   */
+  PVOID out_buf = (PVOID)malloc(4096);
+  return DeviceIoControl(this->h_device, VUL_DRIVER_INITIALISE_IOCTL, NULL, NULL, out_buf, 4096, NULL, NULL);
+}
+
+auto vul_driver::mm_copy_virtual_memory() -> BOOL
+{
+  /*
+  struct copy_buffer
+  {
+    HANDLE handle;
+    QWORD from_address;
+    QWORD to_address;
+    QWORD buffer_size;
+    BYTE number_of_bytes_copied[8];
+    BYTE status;
+    DWORD maybe_size;
+  };
+   */
 }
