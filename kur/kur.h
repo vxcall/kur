@@ -2,8 +2,17 @@
 
 #include "vul_driver.h"
 
-namespace kur
+class kur_t
 {
-	auto init() -> BOOL;
-	auto cleanup(HANDLE h_device) -> BOOL;
-}
+  vul_driver vul_driver;
+
+public:
+  auto init() -> BOOL;
+  auto cleanup() -> BOOL;
+  auto query_device_handle() -> HANDLE;
+
+  kur_t(std::wstring name, std::wstring device_name)
+    : vul_driver(std::move(name), std::move(device_name))
+  {
+  }
+};

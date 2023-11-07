@@ -13,4 +13,5 @@ namespace utils
 
   auto get_temp_path() -> std::wstring;
   auto get_ntdll() -> HMODULE;
+  auto open_reg_key(HKEY h_key_root, LPCWSTR sub_key) -> LSTATUS;
 }

@@ -1,88 +1,102 @@
 #include "kur.h"
 
-auto retrieve_device_handle(const std::wstring& device_name, ACCESS_MASK access_mask) -> HANDLE;
-
 auto main() -> int
 {
-  kur::init();
-  auto h_device = retrieve_device_handle(L"\\Device\\EchoDrv", GENERIC_READ | GENERIC_WRITE);
+  kur_t kur = kur_t(L"EchoDrv", L"\\Device\\EchoDrv");
+  auto status = kur.init();
 
+  if (!status)
+    return 1;
+  const HANDLE h_device = kur.query_device_handle();
   printf("device_handle: %p\n", h_device);
 
-  kur::cleanup(h_device);
   std::cin.get();
+  kur.cleanup();
   return 0;
 }
 
-auto kur::init() -> BOOL
+// the function that's supposed to be called by the user first
+auto kur_t::init() -> BOOL
 {
-  if (!vul_driver::install_driver())
+  if (!vul_driver.install())
   {
     std::cerr << "couldn't deploy the driver" << std::endl;
     return FALSE;
   }
 
-  auto status = vul_driver::setup_reg_key();
+  auto status = vul_driver.setup_reg_key();
   if (!status)
   {
     std::cerr << "couldn't setup the registry" << std::endl;
-    vul_driver::uninstall_driver();
+    vul_driver.uninstall();
     return FALSE;
   }
 
-  status = vul_driver::load_driver();
+  status = vul_driver.load();
   if (!status)
   {
     std::cerr << "couldn't start the service" << std::endl;
-    vul_driver::uninstall_driver();
-    vul_driver::delete_reg_key();
+    vul_driver.uninstall();
+    vul_driver.delete_reg_key();
     return FALSE;
+  }
+
+  status = vul_driver.get_device_handle();
+  if (!status)
+  {
+    vul_driver.uninstall();
+    vul_driver.delete_reg_key();
+    vul_driver.unload();
   }
 
   return TRUE;
 }
 
-auto kur::cleanup(HANDLE h_device) -> BOOL
+// might return nullptr
+auto kur_t::query_device_handle() -> HANDLE
 {
-  const BOOL st = vul_driver::cleanup_reg_driver(h_device);
+  return vul_driver.h_device;
+}
+
+auto kur_t::cleanup() -> BOOL
+{
+  // first check if the key exists
+  const auto status = utils::open_reg_key(HKEY_LOCAL_MACHINE, (SERVICE_PATH_COMMON).c_str());
+  if (status != ERROR_SUCCESS)
+  {
+    if (status == ERROR_FILE_NOT_FOUND)
+    {
+      return TRUE;
+    }
+    std::cerr << "cleanup: key cannot be opened correctly" << std::endl;
+    return FALSE;
+  }
+
+  if (vul_driver.h_device != nullptr)
+    CloseHandle(vul_driver.h_device);
+  // unload the driver
+  BOOL st = vul_driver.unload();
   if (!st)
   {
-    std::cerr << "couldn't cleanup the driver" << std::endl;
+    std::cerr << "cleanup: unloading driver failed" << std::endl;
     return FALSE;
   }
-  return TRUE;
-}
 
-
-// L"\\Device\\echo", GENERIC_READ | GENERIC_WRITE
-auto retrieve_device_handle(const std::wstring& device_name, ACCESS_MASK access_mask) -> HANDLE
-{
-  NTSTATUS status;
-  HANDLE h_device;
-  OBJECT_ATTRIBUTES obj_attr;
-  UNICODE_STRING uni_device_name;
-  IO_STATUS_BLOCK io_status_block;
-
-  RtlInitUnicodeString(&uni_device_name, device_name.c_str());
-
-  InitializeObjectAttributes(&obj_attr, &uni_device_name,
-                             OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
-
-  const ULONG share_access = 0;
-  const ULONG open_options = 0;
-
-  status = NtOpenFile(&h_device,
-                      access_mask,
-                      &obj_attr,
-                      &io_status_block,
-                      share_access,
-                      open_options);
-
-  if (!NT_SUCCESS(status))
+  // delete the key
+  st = vul_driver.delete_reg_key();
+  if (!st)
   {
-    std::cerr << "Failed to open handle. Status code: " << std::hex << status << std::endl;
-    return nullptr;
+    std::cerr << "cleanup: deleting key failed" << std::endl;
+    return FALSE;
   }
-  // This handle has to be closed with CloseHandle(device_handle);
-  return h_device;
+
+  // delete the driver file
+  st = vul_driver.uninstall();
+  if (!st)
+  {
+    std::cerr << "cleanup: uninstalling driver file failed" << std::endl;
+    return FALSE;
+  }
+
+  return TRUE;
 }

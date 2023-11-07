@@ -23,4 +23,19 @@ namespace utils
     }
     return h_ntdll;
   }
+
+  // used to check if key exists or not
+  auto open_reg_key(HKEY h_key_root, LPCWSTR sub_key) -> LSTATUS
+  {
+    HKEY h_key;
+    const LSTATUS status = RegOpenKeyExW(h_key_root, sub_key, 0, KEY_READ, &h_key);
+
+    if (status != ERROR_SUCCESS)
+    {
+      return status;
+    }
+
+    RegCloseKey(h_key);
+    return status;
+  }
 }

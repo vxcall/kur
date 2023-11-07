@@ -10,19 +10,31 @@
 #pragma comment(lib, "ntdll.lib")
 
 constexpr auto SE_LOAD_DRIVER_PRIVILEGE = 10L;
-#define SERVICE_PATH_COMMON std::wstring(L"SYSTEM\\CurrentControlSet\\Services\\" + driver_name)
+#define SERVICE_PATH_COMMON std::wstring(L"SYSTEM\\CurrentControlSet\\Services\\")
 
-namespace vul_driver
+class vul_driver
 {
-  const std::wstring driver_name = L"echo";
+  std::wstring driver_name;
+  std::wstring device_name;
 
-  auto get_full_driver_path() -> std::wstring;
-  auto install_driver() -> BOOL;
-  auto setup_reg_key() -> BOOL;
-  auto load_driver() -> BOOL;
-  auto cleanup_reg_driver(HANDLE h_device) -> BOOL;
-  auto delete_reg_key() -> BOOL;
-  auto uninstall_driver() -> BOOL;
-  auto unload_driver() -> BOOL;
-}
+public:
+  auto get_full_driver_path() const -> std::wstring;
+  auto get_device_handle() -> BOOL;
+  auto unload() const -> BOOL;
 
+  HANDLE h_device = nullptr;
+
+  vul_driver(std::wstring name, std::wstring device_name)
+    : driver_name(std::move(name)), device_name(std::move(device_name))
+  {
+  }
+
+  auto load() const -> BOOL;
+  auto install() const -> BOOL;
+  auto setup_reg_key() const -> BOOL;
+
+  // cleanup functions
+  auto uninstall() const -> BOOL;
+  auto delete_reg_key() const -> BOOL;
+  auto cleanup() const -> BOOL;
+};
