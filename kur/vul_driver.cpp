@@ -215,34 +215,38 @@ auto vul_driver::unload() const -> BOOL
   return TRUE;
 }
 
-auto vul_driver::initialize_driver() const -> BOOL
+auto vul_driver::ioctl_initialize_driver() const -> BOOL
 {
-  // can be improved by defining actual struct
-  /*
-  struct initialize_buffer
-  {
-    PUCHAR pbSignature;
-    DWORD cbSignature;
-    __declspec(align(8)) BYTE client_status;
-    DWORD maybe_size;
-  };
-   */
   PVOID out_buf = (PVOID)malloc(4096);
   return DeviceIoControl(this->h_device, VUL_DRIVER_INITIALISE_IOCTL, NULL, NULL, out_buf, 4096, NULL, NULL);
 }
 
-auto vul_driver::mm_copy_virtual_memory() -> BOOL
+auto vul_driver::ioctl_get_process_handle(DWORD pid, ACCESS_MASK access_mask) -> HANDLE
 {
-  /*
-  struct copy_buffer
+  get_handle_buffer_t req{};
+  req.pid = pid;
+  req.access = access_mask;
+  const BOOL status = DeviceIoControl(this->h_device, VUL_DRIVER_GET_HANDLE_IOCTL, &req, sizeof(req), &req, sizeof(req), NULL,
+                                      NULL);
+  if (!status)
   {
-    HANDLE handle;
-    QWORD from_address;
-    QWORD to_address;
-    QWORD buffer_size;
-    BYTE number_of_bytes_copied[8];
-    BYTE status;
-    DWORD maybe_size;
-  };
-   */
+    std::cerr << "ioctl_get_process_handle failed with code: " << GetLastError() << std::endl;
+    return INVALID_HANDLE_VALUE;
+  }
+  return req.h_process;
+}
+
+auto vul_driver::ioctl_mm_copy_virtual_memory(void* from_address, void* to_address, size_t len,
+                                              HANDLE h_target_process) -> BOOL
+{
+  copy_buffer_t req{};
+  req.from_address = from_address;
+  req.to_address = to_address;
+  req.buffer_size = len;
+  req.h_target_process = h_target_process;
+
+  DWORD bytes_returned = 0;
+
+  return DeviceIoControl(this->h_device, VUL_DRIVER_COPY_IOCTL, &req, sizeof(req), &req, sizeof(req),
+                         &bytes_returned, NULL);
 }

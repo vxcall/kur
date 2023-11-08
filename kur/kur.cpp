@@ -5,6 +5,7 @@ auto main() -> int
   kur_t kur = kur_t(L"EchoDrv", L"\\Device\\EchoDrv");
   auto status = kur.init();
 
+
   if (!status)
     return 1;
   const HANDLE h_device = kur.query_device_handle();
@@ -14,6 +15,7 @@ auto main() -> int
   kur.cleanup();
   return 0;
 }
+
 
 // the function that's supposed to be called by the user first
 auto kur_t::init() -> BOOL
@@ -51,10 +53,10 @@ auto kur_t::init() -> BOOL
     return FALSE;
   }
 
-  status = vul_driver.initialize_driver();
+  status = vul_driver.ioctl_initialize_driver();
   if (!status)
   {
-    std::cerr << "Getting device handle failed" << std::endl;
+    std::cerr << "Getting device handle failed with code: " << GetLastError() << std::endl;
     vul_driver.uninstall();
     vul_driver.delete_reg_key();
     vul_driver.unload();
@@ -62,16 +64,44 @@ auto kur_t::init() -> BOOL
     return FALSE;
   }
 
+  is_initialized = true;
+
   return TRUE;
 }
 
-// might return nullptr
-auto kur_t::query_device_handle() -> HANDLE
+auto kur_t::get_process_handle(DWORD pid, ACCESS_MASK access_mask) -> HANDLE
 {
+  if (!is_initialized)
+  {
+    std::cerr << "kur_t::get_process_handle: kur_t::init() is not yet invoked." << std::endl;
+    return INVALID_HANDLE_VALUE;
+  }
+  return vul_driver.ioctl_get_process_handle(pid, access_mask);
+}
+
+// not tested yet
+auto kur_t::read(void* address, void* buffer, size_t buffer_size, HANDLE h_target_process) -> BOOL
+{
+  if (!is_initialized)
+  {
+    std::cerr << "kur_t::read: kur_t::init() is not yet invoked." << std::endl;
+    return FALSE;
+  }
+  return vul_driver.ioctl_mm_copy_virtual_memory(address, buffer, buffer_size, h_target_process);
+}
+
+// might return nullptr
+auto kur_t::query_device_handle() const -> HANDLE
+{
+  if (!is_initialized)
+  {
+    std::cerr << "kur_t::query_device_handle: kur_t::init() is not yet invoked." << std::endl;
+    return INVALID_HANDLE_VALUE;
+  }
   return vul_driver.h_device;
 }
 
-auto kur_t::cleanup() -> BOOL
+auto kur_t::cleanup() const -> BOOL
 {
   // first check if the key exists
   const auto status = utils::open_reg_key(HKEY_LOCAL_MACHINE, (SERVICE_PATH_COMMON).c_str());
