@@ -1,66 +1,53 @@
 #include "pch.h"
 #include "vul_driver.h"
 
-auto vul_driver::get_full_driver_path() const -> std::wstring
+auto vul_driver::get_full_driver_path() const -> std::optional<std::wstring>
 {
-  const std::wstring temp_path = utils::get_temp_path();
-  if (temp_path.empty())
-  {
-    std::cerr << "couldn't get temp path" << std::endl;
-    return L"";
-  }
-  return temp_path + this->driver_name + L".sys";
+  if (auto temp_path = utils::get_temp_path(); !temp_path)
+    return std::nullopt;
+  else
+    return *temp_path + this->driver_name + L".sys";
 }
 
-auto vul_driver::install() const -> BOOL
+auto vul_driver::install() const -> void
 {
-  const std::wstring full_driver_path = get_full_driver_path();
-  if (full_driver_path.empty())
-  {
-    std::cerr << "couldn't get full driver path" << std::endl;
-    return FALSE;
-  }
+  const auto full_driver_path = get_full_driver_path();
   // check if the driver already exists
-  std::filesystem::path path(full_driver_path);
+  std::filesystem::path path(full_driver_path.value_or(L""));
   if (std::filesystem::exists(path))
   {
-    const int status = _wremove(full_driver_path.c_str());
+    const int status = _wremove(full_driver_path.value_or(L"").c_str());
     if (status != 0)
     {
-      std::cerr << "something goes wrong with _wremove" << std::endl;
-      return FALSE;
+      throw KUR_ERROR("Removing old driver file failed");
     }
   }
 
-  std::ofstream sys_file(full_driver_path, std::ios::out | std::ios::binary);
+  std::ofstream sys_file(*full_driver_path, std::ios::out | std::ios::binary);
   if (!sys_file)
   {
-    std::cerr << "couldn't create file for writing the driver" << std::endl;
-    return FALSE;
+    throw KUR_ERROR("Creating driver file failed");
   }
   sys_file.write(reinterpret_cast<const char*>(echo_driver_resource::driver), sizeof(echo_driver_resource::driver));
   sys_file.close();
-  return TRUE;
 }
 
-auto vul_driver::setup_reg_key() const -> BOOL
+auto vul_driver::setup_reg_key() const -> void
 {
   const std::wstring services_path = SERVICE_PATH_COMMON + this->driver_name;
   const HKEY h_key_root = HKEY_LOCAL_MACHINE;
   const auto l_status = utils::open_reg_key(h_key_root, services_path.c_str());
   if (l_status == ERROR_SUCCESS)
   {
-    std::cerr << "service key already exists" << std::endl;
-    return FALSE;
+    delete_reg_key();
   }
 
   HKEY h_service;
   if (RegCreateKeyW(h_key_root, services_path.c_str(), &h_service) != ERROR_SUCCESS)
   {
-    std::cerr << "couldn't create service key" << std::endl;
-    return FALSE;
+    throw KUR_ERROR("Creating service key failed");
   }
-  const std::wstring global_namespace_driver_path = L"\\??\\" + get_full_driver_path();
+  const std::wstring global_namespace_driver_path = L"\\??\\" + get_full_driver_path().value_or(L"");
   //set image path first
   const LSTATUS status = RegSetKeyValueW(h_service, NULL, L"ImagePath", REG_EXPAND_SZ,
                                          global_namespace_driver_path.c_str(),
@@ -69,8 +56,7 @@ auto vul_driver::setup_reg_key() const -> BOOL
   if (status != ERROR_SUCCESS)
   {
     RegCloseKey(h_service);
-    std::cerr << "couldn't set ImagePath value" << std::endl;
-    return FALSE;
+    throw KUR_ERROR("Setting ImagePath failed");
   }
 
   const DWORD dwTypeValue = SERVICE_KERNEL_DRIVER;
@@ -79,37 +65,32 @@ auto vul_driver::setup_reg_key() const -> BOOL
   if (status != ERROR_SUCCESS)
   {
     RegCloseKey(h_service);
-    std::cerr << "couldn't set Type" << std::endl;
-    return FALSE;
+    throw KUR_ERROR("Setting Type failed");
   }
 
   RegCloseKey(h_service);
-  return TRUE;
 }
 
-auto vul_driver::load() const -> BOOL
+auto vul_driver::load() const -> void
 {
-  HMODULE ntdll = utils::get_ntdll();
+  auto ntdll = utils::get_ntdll();
   if (!ntdll)
   {
-    std::cerr << "couldn't get ntdll handle" << std::endl;
-    return FALSE;
+    throw KUR_ERROR("Obtaining handle for ntdll failed.");
   }
   const auto RtlAdjustPrivilege = reinterpret_cast<utils::RtlAdjustPrivilege>(GetProcAddress(
-    ntdll, "RtlAdjustPrivilege"));
-  const auto NtLoadDriver = reinterpret_cast<utils::NtLoadDriver>(GetProcAddress(ntdll, "NtLoadDriver"));
+    *ntdll, "RtlAdjustPrivilege"));
+  const auto NtLoadDriver = reinterpret_cast<utils::NtLoadDriver>(GetProcAddress(*ntdll, "NtLoadDriver"));
   if (!RtlAdjustPrivilege || !NtLoadDriver)
   {
-    std::cerr << "couldn't get ntdll functions" << std::endl;
-    return FALSE;
+    throw KUR_ERROR("Couldn't get address of RtlAdjustPrivilege or NtLoadDriver");
   }
 
   BOOLEAN old = FALSE;
   NTSTATUS status = RtlAdjustPrivilege(SE_LOAD_DRIVER_PRIVILEGE, TRUE, FALSE, &old);
   if (!NT_SUCCESS(status))
   {
-    std::cerr << "couldn't adjust privilege " << "NTSTATUS is: " << std::hex << status << std::endl;
-    return FALSE;
+    throw KUR_ERROR("RtlAdjustPrivilege failed with NTSTATUS code: " + std::to_string(status));
   }
 
   std::wstring wdriver_reg_path = L"\\Registry\\Machine\\" + SERVICE_PATH_COMMON + this->driver_name;
@@ -118,21 +99,20 @@ auto vul_driver::load() const -> BOOL
 
   // when you load your driver with NtLoadDriver, it won't be registered with the Service Control Manager (SCM). Less trace.
   status = NtLoadDriver(&service_path);
-  // 0xC000010E is STATUS_IMAGE_ALREADY_LOADED
-  if (status == 0xC000010E)
+
+  constexpr auto STATUS_IMAGE_ALREADY_LOADED = 0xC000010E;
+
+  if (status == STATUS_IMAGE_ALREADY_LOADED)
   {
-    std::cout << "driver already loaded" << std::endl;
-    return TRUE;
+    std::cout << "Driver has been already loaded" << std::endl;
   }
   else if (!NT_SUCCESS(status))
   {
-    std::cerr << "couldn't load driver " << "NTSTATUS is: " << std::hex << status << std::endl;;
-    return FALSE;
+    throw KUR_ERROR("NtLoadDriver failed with NTSTATUS code: " + std::to_string(status));
   }
-  return TRUE;
 }
 
-auto vul_driver::get_device_handle() -> BOOL
+auto vul_driver::get_device_handle() -> void
 {
   HANDLE handle;
   OBJECT_ATTRIBUTES obj_attr;
@@ -156,85 +136,82 @@ auto vul_driver::get_device_handle() -> BOOL
 
   if (!NT_SUCCESS(status))
   {
-    std::cerr << "Failed to open handle. Status code: " << std::hex << status << std::endl;
-    this->h_device = nullptr;
-    return FALSE;
+    this->h_device = INVALID_HANDLE_VALUE;
+    throw KUR_ERROR("NtOpenFile failed with NTSTATUS code: " + std::to_string(status));
   }
   // This handle has to be closed with CloseHandle(device_handle);
   this->h_device = handle;
-  return TRUE;
 }
 
-auto vul_driver::uninstall() const -> BOOL
+auto vul_driver::uninstall() const -> void
 {
   // delete the driver file
-  int ok = _wremove(get_full_driver_path().c_str());
+  int ok = _wremove(get_full_driver_path().value_or(L"").c_str());
   if (ok != 0)
   {
-    return FALSE;
+    throw KUR_ERROR("Uninstalling driver failed");
   }
-  return TRUE;
 }
 
-auto vul_driver::delete_reg_key() const -> BOOL
+auto vul_driver::delete_reg_key() const -> void
 {
   const LSTATUS status = RegDeleteTreeW(HKEY_LOCAL_MACHINE, (SERVICE_PATH_COMMON + this->driver_name).c_str());
   if (status != ERROR_SUCCESS)
   {
     if (status == ERROR_FILE_NOT_FOUND)
     {
-      return TRUE;
     }
-    std::cerr << "couldn't delete service key" << std::endl;
-    return FALSE;
+    throw KUR_ERROR("Deleting service key failed with error code: " + std::to_string(status));
   }
-  return TRUE;
 }
 
-auto vul_driver::unload() const -> BOOL
+auto vul_driver::unload() const -> void
 {
   const auto ntdll = utils::get_ntdll();
   if (!ntdll)
   {
-    std::cerr << "couldn't get ntdll handle" << std::endl;
-    return FALSE;
+    throw KUR_ERROR("Obtaining handle for ntdll failed.");
   }
 
   std::wstring wdriver_reg_path = L"\\Registry\\Machine\\" + SERVICE_PATH_COMMON + this->driver_name;
   UNICODE_STRING service_path;
   RtlInitUnicodeString(&service_path, wdriver_reg_path.c_str());
 
-  const auto NtUnloadDriver = reinterpret_cast<utils::NtUnloadDriver>(GetProcAddress(ntdll, "NtUnloadDriver"));
+  const auto NtUnloadDriver = reinterpret_cast<utils::NtUnloadDriver>(GetProcAddress(*ntdll, "NtUnloadDriver"));
   NTSTATUS status = NtUnloadDriver(&service_path);
   if (status != 0x0)
   {
-    std::cerr << "couldn't unload driver " << "NTSTATUS is: " << std::hex << status << std::endl;
     delete_reg_key();
-    return FALSE;
+    throw KUR_ERROR("couldn't unload driver with NTSTATUS code: " + std::to_string(status));
   }
-
-  return TRUE;
 }
 
-auto vul_driver::ioctl_initialize_driver() const -> BOOL
+auto vul_driver::ioctl_initialize_driver() const -> void
 {
+  // memory leak. fix later
   PVOID out_buf = (PVOID)malloc(4096);
-  return DeviceIoControl(this->h_device, VUL_DRIVER_INITIALISE_IOCTL, NULL, NULL, out_buf, 4096, NULL, NULL);
+  initialize_driver_t req{};
+  auto status = DeviceIoControl(this->h_device, VUL_DRIVER_INITIALISE_IOCTL, &req, sizeof(req), &req, sizeof(req), NULL, NULL);
+  if (!status)
+  {
+    throw KUR_ERROR("ioctl_initialize_driver failed");
+  }
 }
 
-auto vul_driver::ioctl_get_process_handle(DWORD pid, ACCESS_MASK access_mask) -> HANDLE
+auto vul_driver::ioctl_get_process_handle(DWORD pid, ACCESS_MASK access_mask) -> std::optional<HANDLE>
 {
   get_handle_buffer_t req{};
   req.pid = pid;
   req.access = access_mask;
+
   const BOOL status = DeviceIoControl(this->h_device, VUL_DRIVER_GET_HANDLE_IOCTL, &req, sizeof(req), &req, sizeof(req),
-                                      NULL,
-                                      NULL);
+                                      NULL, NULL);
+
   if (!status)
   {
-    std::cerr << "ioctl_get_process_handle failed with code: " << GetLastError() << std::endl;
-    return INVALID_HANDLE_VALUE;
+    return std::nullopt;
   }
+
   return req.h_process;
 }
 
@@ -249,6 +226,11 @@ auto vul_driver::ioctl_mm_copy_virtual_memory(void* from_address, void* to_addre
 
   DWORD bytes_returned = 0;
 
-  return DeviceIoControl(this->h_device, VUL_DRIVER_COPY_IOCTL, &req, sizeof(req), &req, sizeof(req),
-                         &bytes_returned, NULL);
+  auto status = DeviceIoControl(this->h_device, VUL_DRIVER_COPY_IOCTL, &req, sizeof(req), &req, sizeof(req),
+                                &bytes_returned, NULL);
+  if (!status)
+  {
+    return FALSE;
+  }
+  return TRUE;
 }

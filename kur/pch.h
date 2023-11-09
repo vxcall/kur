@@ -5,3 +5,5 @@
 #include <winternl.h>
 #include <fstream>
 #include "echo_driver_resource.h"
+#include "kur_error.h"
+#include <optional>

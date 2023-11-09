@@ -146,6 +146,7 @@
   <ItemGroup>
     <ClInclude Include="echo_driver_resource.h" />
     <ClInclude Include="kur.h" />
+    <ClInclude Include="kur_error.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="vul_driver.h" />

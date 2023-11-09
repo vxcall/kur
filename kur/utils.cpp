@@ -3,24 +3,22 @@
 
 namespace utils
 {
-  auto get_temp_path() -> std::wstring
+  auto get_temp_path() -> std::optional<std::wstring>
   {
     const std::filesystem::path temp_path = std::filesystem::temp_directory_path();
     if (temp_path.empty())
     {
-      std::cerr << "cannot get temp path" << std::endl;
-      return L"";
+      return std::nullopt;
     }
     return temp_path.wstring();
   }
 
-  auto get_ntdll() -> HMODULE
+  auto get_ntdll() -> std::optional<HMODULE>
   {
     const HMODULE h_ntdll = GetModuleHandle(L"ntdll.dll");
     if (!h_ntdll)
     {
-      std::cerr << "couldn't get ntdll handle" << std::endl;
-      return NULL;
+      return std::nullopt;
     }
     return h_ntdll;
   }
