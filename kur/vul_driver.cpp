@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "vul_driver.h"
 
 auto vul_driver::get_full_driver_path() const -> std::wstring

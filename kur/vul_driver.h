@@ -1,11 +1,5 @@
 #pragma once
 #include "vul_driver.h"
-#include "echo_driver_resource.h"
-#include "utils.h"
-#include <Windows.h>
-#include <filesystem>
-#include <iostream>
-#include <fstream>
 
 #pragma comment(lib, "ntdll.lib")
 

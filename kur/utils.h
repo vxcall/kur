@@ -1,8 +1,4 @@
 #pragma once
-#include <filesystem>
-#include <iostream>
-#include <Windows.h>
-#include <winternl.h>
 
 
 namespace utils
