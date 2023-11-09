@@ -1,5 +1,6 @@
 #pragma once
 #include "vul_driver.h"
+#include "utils.h"
 
 #pragma comment(lib, "ntdll.lib")
 

@@ -227,7 +227,8 @@ auto vul_driver::ioctl_get_process_handle(DWORD pid, ACCESS_MASK access_mask) ->
   get_handle_buffer_t req{};
   req.pid = pid;
   req.access = access_mask;
-  const BOOL status = DeviceIoControl(this->h_device, VUL_DRIVER_GET_HANDLE_IOCTL, &req, sizeof(req), &req, sizeof(req), NULL,
+  const BOOL status = DeviceIoControl(this->h_device, VUL_DRIVER_GET_HANDLE_IOCTL, &req, sizeof(req), &req, sizeof(req),
+                                      NULL,
                                       NULL);
   if (!status)
   {

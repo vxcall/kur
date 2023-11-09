@@ -1,6 +1,5 @@
 #pragma once
 
-
 namespace utils
 {
   using NtLoadDriver = NTSTATUS(*)(PUNICODE_STRING DriverServiceName);
