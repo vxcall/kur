@@ -188,8 +188,6 @@ auto vul_driver::unload() const -> void
 
 auto vul_driver::ioctl_initialize_driver() const -> void
 {
-  // memory leak. fix later
-  PVOID out_buf = (PVOID)malloc(4096);
   initialize_driver_t req{};
   auto status = DeviceIoControl(this->h_device, VUL_DRIVER_INITIALISE_IOCTL, &req, sizeof(req), &req, sizeof(req), NULL, NULL);
   if (!status)
