@@ -7,3 +7,7 @@ This project was created for study purposes, and it is not recommended to use it
 # background
 I've seen that this specific driver has privilege escalation vulnerability in uc forum. 
 So I started reversing the driver myself and indeed the driver is quite readable and doesnt have access control over its strong ioctls.
+
+# the driver it utilizes
+
+https://www.loldrivers.io/drivers/afb8bb46-1d13-407d-9866-1daa7c82ca63/
