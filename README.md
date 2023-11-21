@@ -12,3 +12,6 @@ So I started reversing the driver myself and indeed the driver is quite readable
 
 the vulnerability was reported as CVE-2023-38817. this repo just uses it.
 https://www.loldrivers.io/drivers/afb8bb46-1d13-407d-9866-1daa7c82ca63/
+
+# How to use
+i'll write it later. all functionalities are encapsulated in kur_t class.
