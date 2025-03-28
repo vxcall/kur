@@ -1,3 +1,5 @@
+![kur_header](https://github.com/user-attachments/assets/85cfdef3-161e-42df-ac85-e7a8bc5b282a)
+
 # kur
 A code simply offers the ability to kernel-mode read / write memory from user-mode using vulnerable signed driver.
 It's simply utilizing MmCopyVirtualMemory, which is undocumented yet one of the most common API, in kernel mode so you can read / write any user-mode memory without having to worry about the protection the memory page has. Besides that, it has a function to obtain process handle of given pid as a side arm. Since handle creation is conducted in kernel-mode, standard access checks and callbacks won't kick in i believe.
