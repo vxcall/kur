@@ -1,4 +1,4 @@
-![kur_header](https://github.com/user-attachments/assets/85cfdef3-161e-42df-ac85-e7a8bc5b282a)
+![kur_header](https://github.com/user-attachments/assets/a3a5184f-b8ef-4f82-8105-b22d16142d56)
 
 # kur
 A code simply offers the ability to kernel-mode read / write memory from user-mode using vulnerable signed driver.
